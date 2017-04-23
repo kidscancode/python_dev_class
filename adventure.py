@@ -1,12 +1,15 @@
 import pygame
 import random
+from os import path
+game_folder = path.dirname(__file__)
+map_folder = path.join(game_folder, 'maps')
 
 WIDTH = 800
-HEIGHT = 600
+HEIGHT = 640
 FPS = 60
 TILESIZE = 32
-PLAYER_SPEED = 1500  # pixels/sec
-FRICTION = -5
+PLAYER_ACCEL = 5000  # pixels/sec
+FRICTION = -15
 
 BLACK = (80, 80, 80)
 WHITE = (255, 255, 255)
@@ -20,10 +23,18 @@ pygame.display.set_caption("Adventure!")
 clock = pygame.time.Clock()
 
 vec2 = pygame.math.Vector2
-class Player(pygame.sprite.Sprite):
+class Wall(pygame.sprite.Sprite):
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self)
         self.image = pygame.Surface((TILESIZE, TILESIZE))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((TILESIZE//1.2, TILESIZE//1.2 ))
         self.image.fill(YELLOW)
         self.rect = self.image.get_rect()
         self.pos = vec2(x, y)
@@ -37,7 +48,7 @@ class Player(pygame.sprite.Sprite):
         self.acc.x = keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
         self.acc.y = keys[pygame.K_DOWN] - keys[pygame.K_UP]
         if self.acc.length() > 0:
-            self.acc = self.acc.normalize() * PLAYER_SPEED
+            self.acc = self.acc.normalize() * PLAYER_ACCEL
         self.acc += self.vel * FRICTION
         self.vel += self.acc * dt
         self.pos += self.vel * dt
@@ -49,11 +60,51 @@ class Player(pygame.sprite.Sprite):
             self.pos.y = 0
         if self.pos.y < 0:
             self.pos.y = HEIGHT
-        self.rect.center = self.pos
+        self.rect.centerx = self.pos.x
+        self.check_collisions('x')
+        self.rect.centery = self.pos.y
+        self.check_collisions('y')
+
+    def check_collisions(self, dir):
+        if dir == 'x':
+            hits = pygame.sprite.spritecollide(self, walls, False)
+            if hits:
+                if self.rect.centerx > hits[0].rect.centerx:
+                    self.pos.x = hits[0].rect.right + self.rect.width / 2
+                if self.rect.centerx < hits[0].rect.centerx:
+                    self.pos.x = hits[0].rect.left - self.rect.width / 2
+                self.rect.centerx = self.pos.x
+                self.vel.x = 0
+        if dir == 'y':
+            hits = pygame.sprite.spritecollide(self, walls, False)
+            if hits:
+                if self.rect.centery > hits[0].rect.centery:
+                    self.pos.y = hits[0].rect.bottom + self.rect.height / 2
+                if self.rect.centery < hits[0].rect.centery:
+                    self.pos.y = hits[0].rect.top - self.rect.height / 2
+                self.rect.centery = self.pos.y
+                self.vel.y = 0
 
 all_sprites = pygame.sprite.Group()
-player = Player(WIDTH / 2, HEIGHT / 2)
-all_sprites.add(player)
+walls = pygame.sprite.Group()
+
+# wall1 = Wall(32 * 10, 32 * 10)
+# all_sprites.add(wall1)
+# walls.add(wall1)
+map_data = []
+with open(path.join(map_folder, 'levelmap.txt'), 'rt') as datafile:
+    for line in datafile:
+        map_data.append(line.strip())
+for row, tiles in enumerate(map_data):
+    for col, tile in enumerate(tiles):
+        if tile == '1':
+            wall = Wall(col * TILESIZE, row * TILESIZE)
+            all_sprites.add(wall)
+            walls.add(wall)
+        if tile == 'P':
+            player = Player(col * TILESIZE, row * TILESIZE)
+            all_sprites.add(player)
+
 running = True
 while running:
     dt = clock.tick(FPS) / 1000
