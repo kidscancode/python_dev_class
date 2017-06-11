@@ -9,6 +9,7 @@ import pygame
 import random
 from os import path
 import xml.etree.ElementTree as ET
+vec2 = pygame.math.Vector2
 game_folder = path.dirname(__file__)
 map_folder = path.join(game_folder, 'maps')
 art_folder = path.join(game_folder, 'art')
@@ -19,6 +20,17 @@ FPS = 60
 TILESIZE = 64
 PLAYER_ACCEL = 5000  # pixels/sec
 FRICTION = -15
+PLAYER_HEALTH = 100
+FIRE_RATE = 250
+BARREL_OFFSET = vec2(30, 10)
+
+MOB_SPEED = 200
+MOB_DAMAGE = 10
+MOB_KNOCKBACK = 20
+
+BULLET_SPEED = 500
+BULLET_LIFETIME = 1000
+KICKBACK = 100
 
 BLACK = (80, 80, 80)
 WHITE = (255, 255, 255)
@@ -31,7 +43,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Adventure!")
 clock = pygame.time.Clock()
 
-vec2 = pygame.math.Vector2
+
 
 def collide_hit_rect(one, two):
     return one.hit_rect.colliderect(two.rect)
@@ -108,6 +120,25 @@ class Wall(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
 
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, pos, dir):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((5, 5))
+        self.image.fill(YELLOW)
+        self.rect = self.image.get_rect()
+        self.pos = vec2(pos)
+        self.rect.center = pos
+        self.vel = vec2(BULLET_SPEED, 0).rotate(dir)
+        self.spawn_time = pygame.time.get_ticks()
+
+    def update(self, dt):
+        self.pos += self.vel * dt
+        self.rect.center = self.pos
+        if pygame.time.get_ticks() - self.spawn_time > BULLET_LIFETIME:
+            self.kill()
+        if pygame.sprite.spritecollideany(self, walls):
+            self.kill()
+
 class Mob(pygame.sprite.Sprite):
     def __init__(self, x, y, target):
         pygame.sprite.Sprite.__init__(self)
@@ -124,6 +155,19 @@ class Mob(pygame.sprite.Sprite):
         self.hit_rect.center = self.rect.center
         self.target = target
 
+    def update(self, dt):
+        dir_vector = (self.target.pos - self.pos).normalize()
+        self.rot = dir_vector.angle_to(vec2(1, 0))
+        self.image = pygame.transform.rotate(self.image_clean, self.rot)
+        self.rect = self.image.get_rect(center=self.rect.center)
+        self.vel = dir_vector * MOB_SPEED
+        self.pos += self.vel * dt
+        self.hit_rect.centerx = self.pos.x
+        collide_with_walls(self, walls, 'x')
+        self.hit_rect.centery = self.pos.y
+        collide_with_walls(self, walls, 'y')
+        self.rect.center = self.hit_rect.center
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self)
@@ -138,17 +182,32 @@ class Player(pygame.sprite.Sprite):
         self.rot = 0
         self.rect.center = self.pos
         self.hit_rect.center = self.rect.center
+        self.health = PLAYER_HEALTH
+        self.last_shot = 0
+
+    def shoot(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > FIRE_RATE:
+            self.last_shot = now
+            pos = self.pos + BARREL_OFFSET.rotate(-self.rot)
+            self.vel = vec2(-KICKBACK, 0).rotate(-self.rot)
+            b = Bullet(pos, -self.rot)
+            all_sprites.add(b)
 
     def update(self, dt):
         self.acc = vec2(0, 0)
         self.rot_speed = 0
         keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE]:
+            self.shoot()
         if keys[pygame.K_LEFT]:
             self.rot_speed = 200
         if keys[pygame.K_RIGHT]:
             self.rot_speed = -200
         if keys[pygame.K_UP]:
             self.acc = vec2(PLAYER_ACCEL, 0).rotate(-self.rot)
+        if keys[pygame.K_DOWN]:
+            self.acc = vec2(-PLAYER_ACCEL / 2, 0).rotate(-self.rot)
         # self.acc.x = keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
         # self.acc.y = keys[pygame.K_DOWN] - keys[pygame.K_UP]
         # if self.acc.length() > 0:
@@ -167,10 +226,7 @@ class Player(pygame.sprite.Sprite):
 
 all_sprites = pygame.sprite.Group()
 walls = pygame.sprite.Group()
-
-# wall1 = Wall(32 * 10, 32 * 10)
-# all_sprites.add(wall1)
-# walls.add(wall1)
+mobs = pygame.sprite.Group()
 character_sheet = Spritesheet(path.join(art_folder, 'spritesheet_characters'))
 map_data = []
 with open(path.join(map_folder, 'map4.txt'), 'rt') as datafile:
@@ -188,6 +244,7 @@ for row, tiles in enumerate(map_data):
         if tile == 'm':
             m = Mob(col * TILESIZE, row * TILESIZE, player)
             all_sprites.add(m)
+            mobs.add(m)
 
 camera = Camera(len(map_data[0]) * TILESIZE, len(map_data) * TILESIZE)
 running = True
@@ -200,6 +257,15 @@ while running:
     # update
     all_sprites.update(dt)
     camera.update(player)
+    # check if player hits mobs
+    mob_hits = pygame.sprite.spritecollide(player, mobs, False, collide_hit_rect)
+    for mob in mob_hits:
+        player.health -= MOB_DAMAGE
+        mob.pos -= 2 * mob.vel * dt
+    if mob_hits:
+        player.pos += vec2(MOB_KNOCKBACK, 0).rotate(-mob_hits[0].rot)
+    if player.health <= 0:
+        running = False
     # draw
     screen.fill(BLACK)
     #all_sprites.draw(screen)
