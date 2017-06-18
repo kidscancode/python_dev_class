@@ -1,6 +1,22 @@
 import pygame
+import pytmx
 from settings import *
 import xml.etree.ElementTree as ET
+
+def draw_player_health(surface, x, y, pct):
+    if pct < 0:
+        pct = 0
+    fill = pct * HEALTH_BAR_LENGTH
+    outline_rect = pygame.Rect(x, y, HEALTH_BAR_LENGTH, HEALTH_BAR_HEIGHT)
+    fill_rect = pygame.Rect(x, y, fill, HEALTH_BAR_HEIGHT)
+    if pct > 0.6:
+        col = GREEN
+    elif pct > 0.3:
+        col = YELLOW
+    else:
+        col = RED
+    pygame.draw.rect(surface, col, fill_rect)
+    pygame.draw.rect(surface, WHITE, outline_rect, 2)
 
 def collide_hit_rect(one, two):
     return one.hit_rect.colliderect(two.rect)
@@ -24,6 +40,18 @@ def collide_with_walls(sprite, group, dir):
                     sprite.pos.y = hits[0].rect.top - sprite.hit_rect.height / 2
                 sprite.hit_rect.centery = sprite.pos.y
                 sprite.vel.y = 0
+
+class TiledMap:
+    def __init__(self, filename):
+        self.data = pytmx.load_pygame(filename, pixelalpha=True)
+        self.width = self.data.width * self.data.tilewidth
+        self.height = self.data.height * self.data.tileheight
+        self.image = pygame.Surface((self.width, self.height))
+        for layer in self.data.visible_layers:
+            if isinstance(layer, pytmx.TiledTileLayer):
+                for x, y, tile in layer.tiles():
+                    self.image.blit(tile, (x * self.data.tilewidth, y * self.data.tileheight))
+        self.rect = self.image.get_rect()
 
 class Spritesheet:
     def __init__(self, filename):

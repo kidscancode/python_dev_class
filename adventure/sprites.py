@@ -22,6 +22,7 @@ class Bullet(pygame.sprite.Sprite):
         self.rect.center = pos
         self.vel = vec2(BULLET_SPEED, 0).rotate(dir)
         self.spawn_time = pygame.time.get_ticks()
+        self.damage = BULLET_DAMAGE
 
     def update(self, dt):
         self.pos += self.vel * dt
@@ -47,8 +48,24 @@ class Mob(pygame.sprite.Sprite):
         self.rect.center = self.pos
         self.hit_rect.center = self.rect.center
         self.target = target
+        self.health = MOB_HEALTH
+
+    def draw_health(self):
+        pct = self.health / MOB_HEALTH
+        if pct > 0.6:
+            col = GREEN
+        elif pct > 0.3:
+            col = YELLOW
+        else:
+            col = RED
+        width = int(self.rect.width * pct)
+        bar = pygame.Rect(0, 0, width, 7)
+        if self.health < MOB_HEALTH:
+            pygame.draw.rect(self.image, col, bar)
 
     def update(self, dt):
+        if self.health <= 0:
+            self.kill()
         dir_vector = (self.target.pos - self.pos).normalize()
         self.rot = dir_vector.angle_to(vec2(1, 0))
         self.image = pygame.transform.rotate(self.image_clean, self.rot)
@@ -87,6 +104,7 @@ class Player(pygame.sprite.Sprite):
             self.vel = vec2(-KICKBACK, 0).rotate(-self.rot)
             b = Bullet(self.game, pos, -self.rot)
             self.game.all_sprites.add(b)
+            self.game.bullets.add(b)
 
     def update(self, dt):
         self.acc = vec2(0, 0)
