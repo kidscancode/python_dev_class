@@ -1,6 +1,6 @@
 import pygame as pg
 from os import path
-from collections import deque
+import heapq
 
 TILESIZE = 32
 GRIDWIDTH = 28
@@ -49,23 +49,54 @@ class SquareGrid:
             rect = pg.Rect(wall * TILESIZE, (TILESIZE, TILESIZE))
             pg.draw.rect(screen, LIGHTGRAY, rect)
 
+class WeightedGrid(SquareGrid):
+    def __init__(self, width, height):
+        super().__init__(width, height)
+        self.weights = {}
+
+    def cost(self, from_node, to_node):
+        if (vec2(from_node) - vec2(to_node)).length_squared() == 1:
+            return self.weights.get(to_node, 0) + 10
+        else:
+            return self.weights.get(to_node, 0) + 14
+
+class PriorityQueue:
+    def __init__(self):
+        self.nodes = []
+
+    def put(self, node, cost):
+        heapq.heappush(self.nodes, (cost, node))
+
+    def get(self):
+        return heapq.heappop(self.nodes)[1]
+
+    def empty(self):
+        return len(self.nodes) == 0
+
 def vec2int(v):
     return(int(v.x), int(v.y))
 
-def bfs(graph, start, end):
-    frontier = deque()
-    frontier.append(start)
+def dijkstra_search(graph, start, end):
+    frontier = PriorityQueue()
+    frontier.put(vec2int(start), 0)
     path = {}
+    cost = {}
     path[vec2int(start)] = None
-    while len(frontier) > 0:
-        current = frontier.popleft()
+    cost[vec2int(start)] = 0
+    while not frontier.empty():
+        current = frontier.get()
         if current == end:
             break
-        for next_node in graph.find_neighbors(current):
-            if vec2int(next_node) not in path:
-                frontier.append(next_node)
-                path[vec2int(next_node)] = current - next_node
+        for next_node in graph.find_neighbors(vec2(current)):
+            next_node = vec2int(next_node)
+            next_cost = cost[current] + graph.cost(current, next_node)
+            if next_node not in cost or next_cost < cost[next_node]:
+                cost[next_node] = next_cost
+                priority = next_cost
+                frontier.put(next_node, priority)
+                path[next_node] = vec2(current) - vec2(next_node)
     return path
+
 
 folder = path.dirname(__file__)
 arrows = {}
@@ -74,13 +105,13 @@ arrow_img = pg.transform.scale(arrow_img, (TILESIZE, TILESIZE))
 for dir in [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
     arrows[dir] = pg.transform.rotate(arrow_img, vec2(dir).angle_to(vec2(1, 0)))
 
-g = SquareGrid(GRIDWIDTH, GRIDHEIGHT)
+g = WeightedGrid(GRIDWIDTH, GRIDHEIGHT)
 walls = [(10, 7), (11, 7), (12, 7), (13, 7), (14, 7), (15, 7), (16, 7), (7, 7), (6, 7), (5, 7), (5, 5), (5, 6), (1, 6), (2, 6), (3, 6), (5, 10), (5, 11), (5, 12), (5, 9), (5, 8), (12, 8), (12, 9), (12, 10), (12, 11), (15, 14), (15, 13), (15, 12), (15, 11), (15, 10), (17, 7), (18, 7), (21, 7), (21, 6), (21, 5), (21, 4), (21, 3), (22, 5), (23, 5), (24, 5), (25, 5), (18, 10), (20, 10), (19, 10), (21, 10), (22, 10), (23, 10), (14, 4), (14, 5), (14, 6), (14, 0), (14, 1), (9, 2), (9, 1), (7, 3), (8, 3), (10, 3), (9, 3), (11, 3), (2, 5), (2, 4), (2, 3), (2, 2), (2, 0), (2, 1), (0, 11), (1, 11), (2, 11), (21, 2), (20, 11), (20, 12), (23, 13), (23, 14), (24, 10), (25, 10), (6, 12), (7, 12), (10, 12), (11, 12), (12, 12), (5, 3), (6, 3), (5, 4)]
 for wall in walls:
     g.walls.append(vec2(wall))
 start = vec2(14, 8)
 end = vec2(14, 10)
-path = bfs(g, start, end)
+path = dijkstra_search(g, start, end)
 
 def draw_grid():
     for x in range(0, WIDTH, TILESIZE):
@@ -105,7 +136,7 @@ while running:
                     g.walls.append(mpos)
             if event.button == 3:
                 start = mpos
-            path = bfs(g, start, end)
+            path = dijkstra_search(g, start, end)
     screen.fill(DARKGRAY)
     # fill explored area
     for node in path:
