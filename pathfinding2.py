@@ -38,8 +38,8 @@ class SquareGrid:
 
     def find_neighbors(self, node):
         neighbors = [node + conn for conn in self.connections]
-        if (node.x + node.y) % 2:
-            neighbors.reverse()
+        #if (node.x + node.y) % 2:
+        #    neighbors.reverse()
         neighbors = filter(self.in_bounds, neighbors)
         neighbors = filter(self.passable, neighbors)
         return neighbors
@@ -76,6 +76,10 @@ class PriorityQueue:
 def vec2int(v):
     return(int(v.x), int(v.y))
 
+def heuristic(a, b):
+    return (abs(a.x - b.x) + abs(a.y - b.y)) * 10
+    # return ((a.x - b.x)**2 + (a.y - b.y)**2)**0.5 * 10
+
 def dijkstra_search(graph, start, end):
     frontier = PriorityQueue()
     frontier.put(vec2int(start), 0)
@@ -92,7 +96,7 @@ def dijkstra_search(graph, start, end):
             next_cost = cost[current] + graph.cost(current, next_node)
             if next_node not in cost or next_cost < cost[next_node]:
                 cost[next_node] = next_cost
-                priority = next_cost
+                priority = next_cost + heuristic(end, vec2(next_node))
                 frontier.put(next_node, priority)
                 path[next_node] = vec2(current) - vec2(next_node)
     return path
