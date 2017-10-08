@@ -30,6 +30,8 @@ while running:
     # draw
     screen.fill(BLACK)
     all_sprites.draw(screen)
+    for sprite in all_sprites:
+        sprite.draw_vectors(screen)
     pygame.display.flip()  # last
 
 pygame.quit()
